@@ -1,0 +1,73 @@
+[project]
+name = "bilingualforge-pdf-engine"
+version = "0.11.0"
+description = "A PDF engine that executes structured orders and returns structured results, over HTTP or a pipe"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "The BilingualForge PDF engine authors" }]
+classifiers = [
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+]
+dependencies = [
+    "pymupdf>=1.24",
+]
+
+[project.optional-dependencies]
+# `dxf_pdf`: a DXF's layouts drawn by ezdxf's drawing add-on on PyMuPDF.
+cad = ["ezdxf>=1.3"]
+# `layout_load` / `layout_detect`: DocLayout-YOLO through BabelDOC.
+# `onnxruntime-gpu` in place of `onnxruntime` puts the model on a graphics card.
+layout = ["babeldoc>=0.6.4", "numpy>=2.0"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+    "pillow>=11.0",
+    "numpy>=2.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pdf_engine"]
+
+[tool.hatch.build.targets.sdist]
+include = ["pdf_engine", "tests", "PROTOCOL.md", "README.md", "LICENSE"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "ANN", "B", "SIM"]
+# PyMuPDF is untyped: `Any` at that seam is honest rather than sloppy.
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN001", "ANN201", "ANN202", "E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+# PyMuPDF, BabelDOC and ezdxf's add-on ship no usable type information.
+[[tool.mypy.overrides]]
+module = ["pdf_engine.*"]
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = ["pymupdf.*", "babeldoc.*", "onnxruntime.*"]
+ignore_missing_imports = true
