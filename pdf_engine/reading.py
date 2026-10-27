@@ -57,6 +57,37 @@ def text(documents: Documents, order: TextOrder) -> dict[str, Any]:
 _IMAGE_KEPT = ("width", "height", "colorspace", "xres", "yres", "bpc")
 
 
+def _decode_as_dict_does(picture: Any) -> None:
+    """Decode what MuPDF's dict would have decoded, and drop the pixels.
+
+    A reading leaves the document's image cache in a state the next RENDERS
+    start from: MuPDF reuses a decoded image rather than decoding the region
+    it draws again, and the two can differ by a level. MuPDF's dict decodes
+    an image it cannot pass through (Flate, CCITT, JBIG2) and a CMYK JPEG to
+    re-encode them, and every mask; without these decodings, a delivery's
+    ink-repair patches changed by a level here and there (corpus sweep of
+    2026-10-27). The decoding costs a tenth of the encoding it replaces.
+    """
+    from pymupdf import mupdf
+
+    kind = picture.fz_compressed_image_type()
+    stored = mupdf.ll_fz_compressed_image_buffer(picture.m_internal)
+    passes = (
+        bool(stored)
+        and kind not in (mupdf.FZ_IMAGE_JBIG2, mupdf.FZ_IMAGE_UNKNOWN)
+        and kind >= mupdf.FZ_IMAGE_BMP
+    )
+    decoded = (
+        [picture] if not passes or (kind == mupdf.FZ_IMAGE_JPEG and picture.n() == 4) else []
+    )
+    mask = picture.mask()
+    if mask.m_internal:
+        decoded.append(mask)
+    for image in decoded:
+        pixmap, _width, _height = mupdf.ll_fz_get_pixmap_from_image(image.m_internal, None, None)
+        mupdf.ll_fz_drop_pixmap(pixmap)
+
+
 def _dict_without_image_bytes(
     page: pymupdf.Page, raw: bool, clip: pymupdf.Rect | None, sort: bool
 ) -> dict[str, Any]:
@@ -71,7 +102,9 @@ def _dict_without_image_bytes(
     PyMuPDF's own ``get_text`` walks it: every line's spans are built by the
     very function MuPDF's dict uses (``extra.JM_make_spanlist``), and an
     image block keeps its place, number, box and geometry — only ``image``,
-    ``mask``, ``ext`` and ``size`` are not produced. A text block lacks its
+    ``mask``, ``ext`` and ``size`` are not produced — the images MuPDF would
+    have decoded to encode them are still decoded (:func:`_decode_as_dict_does`),
+    so the renders that follow on a held document are unchanged. A text block lacks its
     block-level ``flags``, which MuPDF fills in C++ and no binding reaches;
     its spans keep theirs. Proved equal to ``get_text`` otherwise, block for
     block (``tests/test_reading.py``).
@@ -101,6 +134,7 @@ def _dict_without_image_bytes(
             ), strict=True))
             matrix = block.i_transform()
             entry["transform"] = (matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f)
+            _decode_as_dict_does(picture)
         else:
             lines: list[dict[str, Any]] = []
             extent = mupdf.FzRect(mupdf.FzRect.Fixed_EMPTY)

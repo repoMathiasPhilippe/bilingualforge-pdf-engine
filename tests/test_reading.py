@@ -9,6 +9,7 @@ a tuple — against the in-process call.
 from __future__ import annotations
 
 import math
+import random
 from pathlib import Path
 from typing import Any
 
@@ -208,3 +209,56 @@ def test_image_bytes_is_refused_where_it_means_nothing() -> None:
     with pytest.raises(OrderError):
         text_order({"document": {"handle": "h"}, "page": 0, "kind": "dict",
                     "image_bytes": "no"})
+
+
+def _stretched_noise(path: Path, side: int, form: str, mask: bool) -> Path:
+    """Noise stretched over the whole page: Flate RGB or gray (masked or not),
+    or a CMYK JPEG, which MuPDF's dict re-encodes rather than passes through."""
+    noise = random.Random(side * 4 + mask * 2 + len(form))
+    space, channels = {
+        "rgb": (pymupdf.csRGB, 3), "gray": (pymupdf.csGRAY, 1), "cmyk": (pymupdf.csCMYK, 4)
+    }[form]
+    picture = pymupdf.Pixmap(space, side, side, noise.randbytes(side * side * channels), False)
+    if mask:
+        picture = pymupdf.Pixmap(picture, 1)
+        picture.set_alpha(noise.randbytes(side * side))
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    if form == "cmyk":
+        page.insert_image(page.rect, stream=picture.tobytes("jpg", jpg_quality=90))
+    else:
+        page.insert_image(page.rect, pixmap=picture)
+    page.insert_text((72, 800), "Une ligne sous l'image", fontsize=9)
+    document.save(path)
+    return path
+
+
+@pytest.mark.parametrize(("side", "zoom"), [(300, 0.3), (1200, 1.0), (2400, 2.0)])
+@pytest.mark.parametrize(
+    ("form", "mask"), [("rgb", False), ("rgb", True), ("gray", False), ("gray", True),
+                       ("cmyk", False)]
+)
+def test_a_reading_without_bytes_leaves_the_next_renders_as_the_full_one_did(
+    tmp_path: Path, side: int, zoom: float, form: str, mask: bool
+) -> None:
+    """MuPDF reuses an image it already decoded rather than decoding the
+    region it draws, and the two differ: a reading that stopped decoding
+    changed the next clipped renders of a held document — a delivery's
+    ink-repair patches moved by a level. The bare reading decodes what the
+    full one decoded, so the renders after it are the renders after it."""
+    pdf = _stretched_noise(tmp_path / "noise.pdf", side, form, mask)
+    clip = pymupdf.Rect(120, 130, 180, 170)
+    samples: dict[bool, bytes] = {}
+    for image_bytes in (True, False):
+        documents = Documents()
+        handle, document = documents.open(str(pdf))
+        reading.text(documents, text_order(
+            {"document": {"handle": handle}, "page": 0, "kind": "dict",
+             "image_bytes": image_bytes}))
+        samples[image_bytes] = document[0].get_pixmap(
+            matrix=pymupdf.Matrix(zoom, zoom), clip=clip).samples
+        documents.close(handle)
+    with pymupdf.open(pdf) as fresh:
+        untouched = fresh[0].get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=clip).samples
+    assert samples[False] == samples[True]
+    assert untouched != samples[True], "the bench must discriminate"
