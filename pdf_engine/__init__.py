@@ -14,10 +14,10 @@ Run it with ``python -m pdf_engine --port 9100``, or ``python -m pdf_engine --pi
 from __future__ import annotations
 
 #: The engine's own release.
-ENGINE_VERSION = "0.11.0"
+ENGINE_VERSION = "0.12.0"
 
 #: The protocol it speaks. MAJOR changes break clients; MINOR ones add orders.
-PROTOCOL_VERSION = "1.10"
+PROTOCOL_VERSION = "1.11"
 
 #: The name it answers ``/v1/about`` with.
 ENGINE_NAME = "bilingualforge-pdf-engine"

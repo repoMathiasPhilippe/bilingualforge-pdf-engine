@@ -123,3 +123,88 @@ def test_a_page_beyond_the_document_is_named(tmp_path: Path) -> None:
         reading.text(Documents(), text_order({"document": {"path": str(pdf)}, "page": 5}))
 
     assert (beyond.value.code, beyond.value.detail) == ("page_out_of_range", {"page_count": 2})
+
+
+def _image_between_text(path: Path) -> Path:
+    """Text, a Flate image MuPDF must re-encode, text: the image splits two blocks."""
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 100), "Première ligne avant l'image", fontsize=11)
+    picture = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 120, 90), False)
+    picture.clear_with(180)
+    page.insert_image(pymupdf.Rect(72, 105, 312, 285), pixmap=picture)
+    page.insert_text((72, 112), "Seconde ligne après l'image", fontsize=11)
+    page.insert_text((330, 200), "Une colonne à droite", fontsize=9)
+    masked = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 40, 40), True)
+    masked.clear_with(90)
+    page.insert_image(pymupdf.Rect(400, 400, 480, 480), pixmap=masked)
+    page.insert_text((72, 500), "Pied de page", fontsize=8)
+    rotated = document.new_page()
+    rotated.insert_text((72, 100), "Page tournée", fontsize=12)
+    rotated.insert_image(pymupdf.Rect(72, 120, 200, 220), pixmap=picture)
+    rotated.set_rotation(90)
+    document.save(path)
+    return path
+
+
+_BYTES = ("image", "mask", "ext", "size")
+
+
+@pytest.mark.parametrize("kind", ["dict", "rawdict"])
+@pytest.mark.parametrize("sort", [None, True])
+@pytest.mark.parametrize(
+    "clip", [None, (40.0, 60.0, 400.0, 380.0), (100.0, 150.0, 250.0, 250.0), (0, 0, 1, 1)]
+)
+@pytest.mark.parametrize("source", ["rich", "between"])
+def test_a_reading_without_image_bytes_is_mupdf_s_own_less_the_bytes(
+    tmp_path: Path,
+    kind: str,
+    sort: bool | None,
+    clip: tuple[float, float, float, float] | None,
+    source: str,
+) -> None:
+    """Every block MuPDF's ``get_text`` gives, in its place: an image block
+    keeps its number, box and geometry and loses only its bytes; a text block
+    loses only its block ``flags``, which no binding reaches (1.11)."""
+    pdf = (
+        rich_pdf(tmp_path / "rich.pdf") if source == "rich"
+        else _image_between_text(tmp_path / "between.pdf")
+    )
+    documents = Documents()
+    with pymupdf.open(pdf) as document:
+        for index, page in enumerate(document):
+            order: dict[str, Any] = {
+                "document": {"path": str(pdf)}, "page": index, "kind": kind,
+                "image_bytes": False,
+            }
+            options: dict[str, Any] = {}
+            if clip is not None:
+                order["clip"] = list(clip)
+                options["clip"] = pymupdf.Rect(*clip)
+            if sort is not None:
+                order["sort"] = sort
+                options["sort"] = sort
+            bare = decode(reading.text(documents, text_order(order))["result"])
+            expected = page.get_text(kind, **options)
+            for block in expected["blocks"]:
+                for key in _BYTES if block["type"] == 1 else ("flags",):
+                    block.pop(key)
+            assert bare == expected
+
+
+def test_the_images_the_bare_reading_saw_are_the_ones_mupdf_saw(tmp_path: Path) -> None:
+    """The bench above is not empty: it holds image blocks, a mask among them."""
+    pdf = _image_between_text(tmp_path / "between.pdf")
+    with pymupdf.open(pdf) as document:
+        blocks = document[0].get_text("dict")["blocks"]
+    assert [block["type"] for block in blocks].count(1) == 2
+    assert any(block["mask"] is not None for block in blocks if block["type"] == 1)
+
+
+def test_image_bytes_is_refused_where_it_means_nothing() -> None:
+    with pytest.raises(OrderError):
+        text_order({"document": {"handle": "h"}, "page": 0, "kind": "words",
+                    "image_bytes": False})
+    with pytest.raises(OrderError):
+        text_order({"document": {"handle": "h"}, "page": 0, "kind": "dict",
+                    "image_bytes": "no"})

@@ -1,4 +1,4 @@
-# PDF engine protocol — version 1.10
+# PDF engine protocol — version 1.11
 
 The engine executes **orders** and returns **results**, over HTTP. An order
 carries every parameter of the work; the same order on the same file always
@@ -98,7 +98,7 @@ else is plain JSON (non-finite floats as `NaN`/`Infinity`). A library object
 
 | Order | Body | `result` |
 |---|---|---|
-| `POST /v1/text` | `{"document", "page", "kind", "clip"?, "sort"?}` | `get_text(kind)` — `kind` is `text`, `words`, `blocks`, `dict` or `rawdict`, with MuPDF's default flags (a `dict` carries its image blocks and their bytes) |
+| `POST /v1/text` | `{"document", "page", "kind", "clip"?, "sort"?, "image_bytes"?}` | `get_text(kind)` — `kind` is `text`, `words`, `blocks`, `dict` or `rawdict`, with MuPDF's default flags (a `dict` carries its image blocks and their bytes). `image_bytes: false` (1.11, `dict` and `rawdict` only): every block in its place, an image block without `image`, `mask`, `ext` and `size`, a text block without its block-level `flags` — MuPDF re-encodes a scan's image as PNG on every reading, about a second a page |
 | `POST /v1/texttrace` | `{"document", "page"}` | every glyph as drawn, in drawing order |
 | `POST /v1/search` | `{"document", "page", "needle", "quads"?}` | each hit as `(x0, y0, x1, y1)`, or with `quads` as four `(x, y)` corners (UL, UR, LL, LR) |
 | `POST /v1/textbox` | `{"document", "page", "rect"}` | the text inside `rect` |

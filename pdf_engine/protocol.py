@@ -319,7 +319,11 @@ class TextOrder:
     ``kind`` is MuPDF's own extraction (``text``, ``words``, ``blocks``,
     ``dict``, ``rawdict``) with its default flags; ``clip`` limits it to a
     rectangle, ``sort`` orders it top-left to bottom-right; ``None`` leaves
-    MuPDF's default.
+    MuPDF's default. ``image_bytes`` false (1.11, ``dict`` and ``rawdict``
+    only) keeps every image block — its place, number, box and geometry —
+    without its ``image``, ``mask``, ``ext`` and ``size``, and text blocks
+    without their block-level ``flags``: MuPDF re-encodes a scan's image as
+    PNG on every reading, about a second for a page.
     """
 
     path: str | None
@@ -328,6 +332,7 @@ class TextOrder:
     kind: str
     clip: tuple[float, float, float, float] | None
     sort: bool | None
+    image_bytes: bool = True
 
 
 def text_order(payload: Any) -> TextOrder:
@@ -344,10 +349,14 @@ def text_order(payload: Any) -> TextOrder:
     sort = payload.get("sort")
     if sort is not None and not isinstance(sort, bool):
         raise OrderError("bad_order", "« sort » attend true ou false.")
+    image_bytes = _flag(payload, "image_bytes", True)
+    if not image_bytes and kind not in ("dict", "rawdict"):
+        raise OrderError("bad_order", "« image_bytes » ne vaut que pour dict et rawdict.")
     return TextOrder(
         path, handle, _index(payload, "page"), kind,
         _numbers(payload, "clip", 4),  # type: ignore[arg-type]
         sort,
+        image_bytes,
     )
 
 

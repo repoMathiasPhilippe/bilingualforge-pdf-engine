@@ -42,10 +42,89 @@ def text(documents: Documents, order: TextOrder) -> dict[str, Any]:
         if order.sort is not None:
             options["sort"] = order.sort
         try:
-            result = page.get_text(order.kind, **options)
+            if order.image_bytes:
+                result = page.get_text(order.kind, **options)
+            else:
+                result = _dict_without_image_bytes(
+                    page, order.kind == "rawdict", options.get("clip"), bool(order.sort)
+                )
         except Exception as exc:  # noqa: BLE001 - named for the client
             raise _failed("Lecture du texte", exc) from exc
         return {"result": encode(result)}
+
+
+#: What an image block keeps when its bytes are not produced (1.11).
+_IMAGE_KEPT = ("width", "height", "colorspace", "xres", "yres", "bpc")
+
+
+def _dict_without_image_bytes(
+    page: pymupdf.Page, raw: bool, clip: pymupdf.Rect | None, sort: bool
+) -> dict[str, Any]:
+    """``get_text("dict"|"rawdict")``, image blocks without their bytes.
+
+    MuPDF builds the whole answer in one call and encodes every image it
+    meets — as PNG when the image is not stored in a format it can pass
+    through, which is a scan's case: a second and ten megabytes a reading.
+    The image block cannot simply be left out (``TEXT_PRESERVE_IMAGES``):
+    an image also SEPARATES text blocks, and without it two blocks become
+    one. So the page's structured text is walked here, block by block, as
+    PyMuPDF's own ``get_text`` walks it: every line's spans are built by the
+    very function MuPDF's dict uses (``extra.JM_make_spanlist``), and an
+    image block keeps its place, number, box and geometry — only ``image``,
+    ``mask``, ``ext`` and ``size`` are not produced. A text block lacks its
+    block-level ``flags``, which MuPDF fills in C++ and no binding reaches;
+    its spans keep theirs. Proved equal to ``get_text`` otherwise, block for
+    block (``tests/test_reading.py``).
+    """
+    from pymupdf import extra, mupdf
+
+    flags = pymupdf.TEXTFLAGS_RAWDICT if raw else pymupdf.TEXTFLAGS_DICT
+    frame = page.cropbox if clip is None else None
+    textpage = page.get_textpage(clip=clip, flags=flags)
+    stext = textpage.this
+    bounds = mupdf.FzRect(stext.m_internal.mediabox)
+    buffer = mupdf.fz_new_buffer(128)
+    blocks: list[dict[str, Any]] = []
+    for number, block in enumerate(stext):
+        # Every block the structured text holds, as MuPDF's dict gives it: the
+        # clip already acted when the page was read — an image outside it
+        # comes back with its box cut down to nothing, and is still a block.
+        box = mupdf.FzRect(block.m_internal.bbox)
+        image = block.m_internal.type == mupdf.FZ_STEXT_BLOCK_IMAGE
+        entry: dict[str, Any] = {"number": number, "type": block.m_internal.type}
+        if image:
+            picture = block.i_image()
+            entry["bbox"] = (box.x0, box.y0, box.x1, box.y1)
+            entry.update(zip(_IMAGE_KEPT, (
+                picture.w(), picture.h(), picture.n(),
+                picture.xres(), picture.yres(), picture.bpc(),
+            ), strict=True))
+            matrix = block.i_transform()
+            entry["transform"] = (matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f)
+        else:
+            lines: list[dict[str, Any]] = []
+            extent = mupdf.FzRect(mupdf.FzRect.Fixed_EMPTY)
+            for line in block:
+                if mupdf.fz_is_empty_rect(
+                    mupdf.fz_intersect_rect(bounds, mupdf.FzRect(line.m_internal.bbox))
+                ) and not mupdf.fz_is_infinite_rect(bounds):
+                    continue
+                spans: dict[str, Any] = {}
+                reach = extra.JM_make_spanlist(spans, line, raw, buffer, bounds)
+                extent = mupdf.fz_union_rect(extent, reach)
+                spans["wmode"] = line.m_internal.wmode
+                spans["dir"] = (line.m_internal.dir.x, line.m_internal.dir.y)
+                spans["bbox"] = (reach.x0, reach.y0, reach.x1, reach.y1)
+                lines.append(spans)
+            entry["bbox"] = (extent.x0, extent.y0, extent.x1, extent.y1)
+            entry["lines"] = lines
+        blocks.append(entry)
+    width, height = (frame.width, frame.height) if frame is not None else (
+        textpage.rect.width, textpage.rect.height
+    )
+    if sort:
+        blocks.sort(key=lambda entry: (entry["bbox"][3], entry["bbox"][0]))
+    return {"width": width, "height": height, "blocks": blocks}
 
 
 def texttrace(

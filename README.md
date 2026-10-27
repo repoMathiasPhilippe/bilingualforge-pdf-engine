@@ -62,6 +62,7 @@ for a modified engine.
 | 1.8 | `draw_line`, `draw_circle`, `draw_paths` (one shape), `radius` on `draw_rect`; `story` — HTML flowed into a PDF; `dxf_pdf` — a DXF's layouts drawn by ezdxf on PyMuPDF |
 | 1.9 | `layout_load`, `layout_detect` — page regions by DocLayout-YOLO (BabelDOC), from pixels, on a proven graphics card |
 | 1.10 | `about` names the MuPDF version (`backend.mupdf`): the client asks instead of importing the library |
+| 1.11 | `text` takes `image_bytes: false` for `dict` and `rawdict`: the same blocks, without re-encoding a scan's image on every reading |
 
 Further orders arrive family by family (documents, text reading, images and
 drawings, redaction, writing), each as a MINOR version.
