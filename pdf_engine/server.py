@@ -67,6 +67,7 @@ from pdf_engine.protocol import (
     open_order,
     page_order,
     picture_order,
+    reading_copy_order,
     redact_order,
     render_order,
     rotation_order,
@@ -152,6 +153,10 @@ def _rotation(engine: Engine, payload: Any) -> dict[str, Any]:
 
 def _save(engine: Engine, payload: Any) -> dict[str, Any]:
     return editing.save(engine.documents, save_order(payload))
+
+
+def _reading_copy(engine: Engine, payload: Any) -> dict[str, Any]:
+    return editing.reading_copy(engine.documents, reading_copy_order(payload))
 
 
 def _text(engine: Engine, payload: Any) -> dict[str, Any]:
@@ -300,6 +305,7 @@ ORDERS: dict[str, Callable[[Engine, Any], dict[str, Any]]] = {
     "set_cropbox": _cropbox,
     "set_rotation": _rotation,
     "save": _save,
+    "reading_copy": _reading_copy,
     "text": _text,
     "texttrace": _texttrace,
     "search": _search,

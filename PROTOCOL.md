@@ -1,4 +1,4 @@
-# PDF engine protocol — version 1.11
+# PDF engine protocol — version 1.12
 
 The engine executes **orders** and returns **results**, over HTTP. An order
 carries every parameter of the work; the same order on the same file always
@@ -80,6 +80,7 @@ copy would change nothing anyone could see. All answers are JSON.
 | `POST /v1/redact` (1.4) | `{"document": {"handle"}, "page", "rects", "images"?, "graphics"?, "text"?}` | `{"redacted": N}` — each rectangle marked for redaction, then all applied at once. `images`: `none`, `remove`, `pixels`, `remove_unless_invisible`; `graphics`: `none`, `remove_if_covered`, `remove_if_touched`; `text`: `remove`, `none` — MuPDF's own options, its defaults when absent (`pixels`, `remove_if_covered`, `remove`) |
 | `POST /v1/subset_fonts` (1.4) | `{"document": {"handle"}}` | `{"subset": true}` — every embedded font keeps only the glyphs the document uses |
 | `POST /v1/save` | `{"document": {"handle"}, "path", "garbage"?, "deflate"?}` | `{"path", "page_count"}` — `garbage` 0–4, `deflate` false by default |
+| `POST /v1/reading_copy` (1.12) | `{"document": {"path"}, "page", "path"}` | `{"path", "page_count": 1, "unfiltered": N}` — page `page` of the FILE written alone to `path`, for reading: every image it draws, and every soft mask, whose filters only transform bytes (`FlateDecode`, `LZWDecode`, `RunLengthDecode`, `ASCIIHexDecode`, `ASCII85Decode`, with or without a predictor) is stored unfiltered — the same samples, `N` of them rewritten. JPEG, JPEG 2000, JBIG2 and CCITT images keep their stream: a JPEG decoded at a reduced size is not the full decoding reduced. Renders and text of the copy are those of the source page, at every zoom and clip; a scan's 400 dpi page image, undone in full by each render of a freshly opened file, renders in a fifteenth of the time. The copy holds the page alone because every order reads its whole file |
 
 In `describe`, `rect` is the page as displayed — its crop box turned by its
 rotation — in the coordinates every other order uses; `mediabox` and

@@ -234,6 +234,38 @@ def save_order(payload: Any) -> SaveOrder:
     )
 
 
+@dataclass(frozen=True)
+class ReadingCopyOrder:
+    """Write page ``page`` of the file ``source`` alone to ``path``, for reading (1.12).
+
+    Every image the page draws whose filters only transform bytes (Flate,
+    LZW, run length, hexadecimal, base 85, with or without a predictor) is
+    stored unfiltered: the same samples, without the decoding. The other
+    images (JPEG, JPEG 2000, JBIG2, CCITT) keep their stream — their decoder
+    can depend on the size they are drawn at.
+    """
+
+    source: str
+    page: int
+    path: str
+
+
+def reading_copy_order(payload: Any) -> ReadingCopyOrder:
+    """``POST /v1/reading_copy``.
+
+    Raises:
+        OrderError: ``bad_order``.
+    """
+    payload = _object(payload)
+    source, _handle_named = _document(payload)
+    if source is None:
+        raise OrderError("bad_order", "« document » attend le chemin d'un fichier.")
+    path = payload.get("path")
+    if not isinstance(path, str) or not Path(path).is_absolute():
+        raise OrderError("bad_order", "« path » attend un chemin absolu.")
+    return ReadingCopyOrder(source, _index(payload, "page"), path)
+
+
 def open_order(payload: Any) -> tuple[str, bool]:
     """The path ``POST /v1/open`` asks to open, and whether in place.
 

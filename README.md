@@ -63,6 +63,7 @@ for a modified engine.
 | 1.9 | `layout_load`, `layout_detect` — page regions by DocLayout-YOLO (BabelDOC), from pixels, on a proven graphics card |
 | 1.10 | `about` names the MuPDF version (`backend.mupdf`): the client asks instead of importing the library |
 | 1.11 | `text` takes `image_bytes: false` for `dict` and `rawdict`: the same blocks, without re-encoding a scan's image on every reading |
+| 1.12 | `reading_copy` — one page alone, its byte-filtered images stored unfiltered: the same renders, without undoing the compression on every reading |
 
 Further orders arrive family by family (documents, text reading, images and
 drawings, redaction, writing), each as a MINOR version.

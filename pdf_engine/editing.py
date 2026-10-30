@@ -14,7 +14,13 @@ from typing import Any
 import pymupdf
 
 from pdf_engine.documents import Documents
-from pdf_engine.protocol import InsertOrder, OrderError, RedactOrder, SaveOrder
+from pdf_engine.protocol import (
+    InsertOrder,
+    OrderError,
+    ReadingCopyOrder,
+    RedactOrder,
+    SaveOrder,
+)
 
 
 def _page(document: pymupdf.Document, index: int) -> pymupdf.Page:
@@ -112,6 +118,58 @@ def save(documents: Documents, order: SaveOrder) -> dict[str, Any]:
         except Exception as exc:  # noqa: BLE001 - named for the client
             raise _failed("Enregistrement", exc) from exc
         return {"path": str(target), "page_count": document.page_count}
+
+
+#: The filters that only transform bytes, by their full and abbreviated names:
+#: an image behind them alone decodes the same way at every size.
+_BYTE_FILTERS = frozenset({
+    "FlateDecode", "Fl", "LZWDecode", "LZW", "RunLengthDecode", "RL",
+    "ASCIIHexDecode", "AHx", "ASCII85Decode", "A85",
+})
+
+
+def _byte_filtered(document: pymupdf.Document, xref: int) -> bool:
+    """Whether the image ``xref`` is filtered, and by byte transforms only."""
+    kind, value = document.xref_get_key(xref, "Filter")
+    if kind == "name":
+        names = [value.lstrip("/")]
+    elif kind == "array":
+        names = [name.strip() for name in value.strip("[] ").split("/") if name.strip()]
+    else:
+        return False
+    return bool(names) and all(name in _BYTE_FILTERS for name in names)
+
+
+def reading_copy(documents: Documents, order: ReadingCopyOrder) -> dict[str, Any]:
+    """Write one page alone, its byte-filtered images stored unfiltered.
+
+    A scan's page image is the cost of every reading that renders it: a
+    400 dpi page stored as Flate with a PNG predictor is undone in full —
+    about 0.4 s — by each render of a document opened afresh, whatever the
+    size of the clip. Stored unfiltered, the same samples render in a
+    fifteenth of that. The copy holds the page alone, because every order
+    reads its whole file. Nothing else changes: the page object, its content
+    and its resources are the source's own (``select``).
+    """
+    with documents.named(order.source, None) as document:
+        _page(document, order.page)
+        try:
+            document.select([order.page])
+            stored = 0
+            for item in document[0].get_images(full=True):
+                for xref in {item[0], item[1]} - {0}:
+                    if not _byte_filtered(document, xref):
+                        continue
+                    # Uncompressed, ``update_stream`` drops the filter and
+                    # its parameters with it.
+                    document.update_stream(xref, document.xref_stream(xref), compress=0)
+                    stored += 1
+            target = Path(order.path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            document.save(str(target), garbage=1)
+        except Exception as exc:  # noqa: BLE001 - named for the client
+            raise _failed("Copie de lecture", exc) from exc
+    return {"path": str(target), "page_count": 1, "unfiltered": stored}
 
 
 #: MuPDF's constant for each redaction option the protocol names.
