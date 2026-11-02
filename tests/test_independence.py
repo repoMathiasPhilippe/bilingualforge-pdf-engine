@@ -8,7 +8,7 @@ from pathlib import Path
 PACKAGE = Path(__file__).resolve().parents[1] / "pdf_engine"
 
 #: What the engine may import besides the standard library and itself.
-THIRD_PARTY = {"pymupdf", "ezdxf", "babeldoc", "onnxruntime", "numpy"}
+THIRD_PARTY = {"pymupdf", "ezdxf", "babeldoc", "onnxruntime", "numpy", "truststore"}
 
 
 def _top_level_imports(path: Path) -> set[str]:
