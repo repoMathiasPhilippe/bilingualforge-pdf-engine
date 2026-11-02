@@ -1,6 +1,6 @@
 [project]
 name = "bilingualforge-pdf-engine"
-version = "0.14.0"
+version = "0.14.1"
 description = "A PDF engine that executes structured orders and returns structured results, over HTTP or a pipe"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -21,7 +21,8 @@ dependencies = [
 cad = ["ezdxf>=1.3"]
 # `layout_load` / `layout_detect`: DocLayout-YOLO through BabelDOC.
 # `onnxruntime-gpu` in place of `onnxruntime` puts the model on a graphics card.
-layout = ["babeldoc>=0.6.4", "numpy>=2.0"]
+# `truststore`: `--system-trust`, for the first download behind a TLS proxy.
+layout = ["babeldoc>=0.6.4", "numpy>=2.0", "truststore>=0.10"]
 
 [dependency-groups]
 dev = [

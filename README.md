@@ -26,6 +26,7 @@ The `cad` extra adds ezdxf (`dxf_pdf`), the `layout` extra BabelDOC
 python -m pdf_engine --host 127.0.0.1 --port 9100
 python -m pdf_engine --port 0 --watch-stdin   # as a child: system-chosen port, stops when stdin closes
 python -m pdf_engine --pipe                   # as a child: frames on stdin/stdout, no socket
+python -m pdf_engine --port 0 --watch-stdin --system-trust   # TLS against the system's store: the layout model's first download behind a proxy
 ```
 
 Requirements: Python 3.12, `pymupdf`; `ezdxf` for `dxf_pdf`; `babeldoc` (and

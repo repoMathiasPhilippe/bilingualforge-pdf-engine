@@ -14,7 +14,7 @@ Run it with ``python -m pdf_engine --port 9100``, or ``python -m pdf_engine --pi
 from __future__ import annotations
 
 #: The engine's own release.
-ENGINE_VERSION = "0.14.0"
+ENGINE_VERSION = "0.14.1"
 
 #: The protocol it speaks. MAJOR changes break clients; MINOR ones add orders.
 PROTOCOL_VERSION = "1.13"
