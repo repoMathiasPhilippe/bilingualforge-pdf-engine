@@ -56,6 +56,7 @@ from pdf_engine.protocol import (
     glyphs_order,
     held_order,
     image_info_order,
+    image_placements_order,
     image_rects_order,
     images_order,
     insert_order,
@@ -195,6 +196,10 @@ def _image_rects(engine: Engine, payload: Any) -> dict[str, Any]:
     return objects.image_rects(engine.documents, *image_rects_order(payload))
 
 
+def _image_placements(engine: Engine, payload: Any) -> dict[str, Any]:
+    return objects.image_placements(engine.documents, *image_placements_order(payload))
+
+
 def _image_info(engine: Engine, payload: Any) -> dict[str, Any]:
     return objects.image_info(engine.documents, *image_info_order(payload))
 
@@ -316,6 +321,7 @@ ORDERS: dict[str, Callable[[Engine, Any], dict[str, Any]]] = {
     "images": _images,
     "image_rects": _image_rects,
     "image_info": _image_info,
+    "image_placements": _image_placements,
     "extract_image": _extract_image,
     "xref_key": _xref_key,
     "links": _links,

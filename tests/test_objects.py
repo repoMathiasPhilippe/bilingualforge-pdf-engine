@@ -122,6 +122,63 @@ def test_images_their_placements_and_objects_are_mupdf_s_own(tmp_path: Path) -> 
     assert len(placed) == 2, "the tile is placed twice"
 
 
+def _twin_pdf(path: Path) -> Path:
+    """Two image objects with the same pixels, each placed once: MuPDF finds
+    placements by DIGEST, so each xref answers both placements."""
+    tile = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 10, 10), False)
+    tile.set_rect(tile.irect, (90, 30, 160))
+    first = path.with_name("first.pdf")
+    with pymupdf.open() as document:
+        document.new_page(width=300, height=200).insert_image(
+            pymupdf.Rect(20, 20, 60, 60), pixmap=tile
+        )
+        document.save(first)
+    with pymupdf.open(first) as document:
+        page = document[0]
+        # A second session forgets the first insertion: a new object.
+        page.insert_image(pymupdf.Rect(120, 20, 160, 60), pixmap=tile)
+        document.save(path)
+    return path
+
+
+@pytest.mark.parametrize("make", [objects_pdf, _twin_pdf])
+def test_image_placements_are_get_image_rects_of_every_declared_image(
+    tmp_path: Path, make: Any
+) -> None:
+    pdf = make(tmp_path / "placements.pdf")
+
+    answer = decode(objects.image_placements(Documents(), str(pdf), None, 0)["result"])
+
+    with pymupdf.open(pdf) as document:
+        page = document[0]
+        expected = [
+            (image[0], numbers(page.get_image_rects(image[0])))
+            for image in page.get_images(full=True)
+        ]
+    assert [(xref, list(rects)) for xref, rects in answer] == [
+        (xref, list(rects)) for xref, rects in expected
+    ]
+    assert sum(len(rects) for _, rects in answer) > len(answer) - 1
+
+
+def test_twin_images_each_answer_both_placements(tmp_path: Path) -> None:
+    pdf = _twin_pdf(tmp_path / "twins.pdf")
+
+    answer = decode(objects.image_placements(Documents(), str(pdf), None, 0)["result"])
+
+    assert len({xref for xref, _ in answer}) == 2
+    assert [len(rects) for _, rects in answer] == [2, 2]
+
+
+def test_a_page_without_images_places_none(tmp_path: Path) -> None:
+    pdf = tmp_path / "plain.pdf"
+    with pymupdf.open() as document:
+        document.new_page().insert_text((72, 72), "Aucune image")
+        document.save(pdf)
+
+    assert decode(objects.image_placements(Documents(), str(pdf), None, 0)["result"]) == []
+
+
 def test_links_and_annotations_are_mupdf_s_own(tmp_path: Path) -> None:
     pdf = objects_pdf(tmp_path / "objects.pdf")
     documents = Documents()

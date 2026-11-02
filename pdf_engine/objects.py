@@ -55,6 +55,50 @@ def image_rects(
             raise _failed("Placement d'image", exc) from exc
 
 
+def image_placements(
+    documents: Documents, path: str | None, handle: str | None, index: int
+) -> dict[str, Any]:
+    """Every image ``get_images(full=True)`` declares, with ``get_image_rects``
+    of each: ``[(xref, rects), …]`` in the declared order.
+
+    ``get_image_rects`` decodes its image, then every image the page draws,
+    to compare their digests: asked once per image, a page of *n* images
+    decoded *n* × (*n* + 1) of them — 64 on one delivered scan page held the
+    engine 14 s. Here each image is decoded once for its digest and the page
+    once for its placements; the answer is the same comparison.
+    """
+    with documents.named(path, handle) as document:
+        page = _page(document, index)
+        try:
+            declared = [image[0] for image in page.get_images(full=True)]
+            if not declared:
+                return {"result": encode([])}
+            digests: dict[int, bytes] = {}
+            for xref in declared:
+                if xref not in digests:
+                    pixmap = pymupdf.Pixmap(document, xref)
+                    digests[xref] = pixmap.digest
+                    del pixmap
+            infos = page.get_image_info(hashes=True)
+            return {
+                "result": encode(
+                    [
+                        (
+                            xref,
+                            [
+                                pymupdf.Rect(info["bbox"])
+                                for info in infos
+                                if info["digest"] == digests[xref]
+                            ],
+                        )
+                        for xref in declared
+                    ]
+                )
+            }
+        except Exception as exc:  # noqa: BLE001 - named for the client
+            raise _failed("Placement d'image", exc) from exc
+
+
 def image_info(
     documents: Documents, path: str | None, handle: str | None, index: int, xrefs: bool
 ) -> dict[str, Any]:

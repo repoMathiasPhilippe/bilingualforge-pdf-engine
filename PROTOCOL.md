@@ -1,4 +1,4 @@
-# PDF engine protocol — version 1.12
+# PDF engine protocol — version 1.13
 
 The engine executes **orders** and returns **results**, over HTTP. An order
 carries every parameter of the work; the same order on the same file always
@@ -118,6 +118,7 @@ Same typed JSON. A rectangle, a point or a quad is the tuple of its numbers.
 | `POST /v1/images` | `{"document", "page", "full"?}` | `get_images(full=…)` — the images the page's resources declare |
 | `POST /v1/image_rects` | `{"document", "page", "xref"}` | `get_image_rects(xref)` — where the page places that image |
 | `POST /v1/image_info` | `{"document", "page", "xrefs"?}` | `get_image_info(xrefs=…)` — every image the page draws |
+| `POST /v1/image_placements` (1.13) | `{"document", "page"}` | `[(xref, get_image_rects(xref)), …]` for every image `get_images(full=True)` declares, in that order — on ONE page |
 | `POST /v1/extract_image` | `{"document", "xref", "content"?}` | `extract_image(xref)`; `content: false` leaves the `image` bytes out |
 | `POST /v1/xref_key` | `{"document", "xref", "key"}` | `xref_get_key(xref, key)` — the value's type and its source text |
 | `POST /v1/links` | `{"document", "page"}` | `get_links()` |
@@ -126,8 +127,8 @@ Same typed JSON. A rectangle, a point or a quad is the tuple of its numbers.
 `POST /v1/picture` — `{"path": "<absolute>"}` → `{"width", "height", "n",
 "xres", "yres"}`: a picture file (PNG, JPEG, TIFF…) as MuPDF decodes it.
 
-**Three of these decode the image** — `image_rects`, `image_info` with
-`xrefs`, `extract_image` — and, like a render, leave the decode in the open
+**Four of these decode the image** — `image_rects`, `image_placements`,
+`image_info` with `xrefs`, `extract_image` — and, like a render, leave the decode in the open
 document: a render that follows on the same handle may differ from one on a
 fresh copy (see « Naming a document »). `images`, `image_info` without
 `xrefs` and `drawings` decode nothing.
@@ -135,6 +136,13 @@ fresh copy (see « Naming a document »). `images`, `image_info` without
 `image_info` answers for a page opened for that order. In process, MuPDF
 keeps the answer on the page object, and a plain call after an `xrefs` call
 returns the richer one; the engine never does.
+
+`image_placements` exists for the same reason. `get_image_rects` finds an
+image by comparing its digest with the digest of every image the page
+draws, and those digests are computed per page object: asked image by
+image, each order hashes the whole page again — 36 images of a delivered
+400 dpi scan page took 6 s that way and 0.25 s on one page. The answer is
+the same comparison.
 
 ## Writing (1.6)
 

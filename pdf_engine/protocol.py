@@ -472,6 +472,15 @@ def image_rects_order(payload: Any) -> tuple[str | None, str | None, int, int]:
     return path, handle, page, _xref(payload, "xref")
 
 
+def image_placements_order(payload: Any) -> tuple[str | None, str | None, int]:
+    """``POST /v1/image_placements``: a page.
+
+    Raises:
+        OrderError: ``bad_order``.
+    """
+    return page_order(payload)
+
+
 def image_info_order(payload: Any) -> tuple[str | None, str | None, int, bool]:
     """``POST /v1/image_info``: a page, and whether to add each image's xref.
 
